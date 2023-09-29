@@ -14,11 +14,14 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 public interface PrioritizedExecutor {
 
     CancellableTask submit(PriorityCallable<?> task);
+
+    void shutdown();
 
     /**
      * A handler for tasks that cannot be executed by a {@link ThreadPoolExecutor}.
@@ -57,13 +60,15 @@ public interface PrioritizedExecutor {
             this.executor = new Pool(maxSize, maxSize, 1, TimeUnit.MINUTES, queue, new DefaultThreadFactory(), new DefaultRejectedExecutionHandler());
         }
 
-        @Override public CancellableTask submit(PriorityCallable<?> task) {
-            executor.execute(task);
-            return () -> {
-
-            };
+        @Override
+        public CancellableTask submit(PriorityCallable<?> task) {
+            return executor.executeTask(task);
         }
 
+        @Override
+        public void shutdown() {
+            executor.shutdownNow();
+        }
     }
 
     /**
@@ -653,7 +658,8 @@ public interface PrioritizedExecutor {
             // assert targetState == SHUTDOWN || targetState == STOP;
             for (; ; ) {
                 int c = ctl.get();
-                if (runStateAtLeast(c, targetState) || ctl.compareAndSet(c, ctlOf(targetState, workerCountOf(c)))) break;
+                if (runStateAtLeast(c, targetState) || ctl.compareAndSet(c, ctlOf(targetState, workerCountOf(c))))
+                    break;
             }
         }
 
@@ -670,7 +676,8 @@ public interface PrioritizedExecutor {
         final void tryTerminate() {
             for (; ; ) {
                 int c = ctl.get();
-                if (isRunning(c) || runStateAtLeast(c, TIDYING) || (runStateLessThan(c, STOP) && !workQueue.isEmpty())) return;
+                if (isRunning(c) || runStateAtLeast(c, TIDYING) || (runStateLessThan(c, STOP) && !workQueue.isEmpty()))
+                    return;
                 if (workerCountOf(c) != 0) { // Eligible to terminate
                     interruptIdleWorkers(ONLY_ONE);
                     return;
@@ -837,7 +844,8 @@ public interface PrioritizedExecutor {
             retry:
             for (int c = ctl.get(); ; ) {
                 // Check if queue empty only if necessary.
-                if (runStateAtLeast(c, SHUTDOWN) && (runStateAtLeast(c, STOP) || firstTask != null || workQueue.isEmpty())) return false;
+                if (runStateAtLeast(c, SHUTDOWN) && (runStateAtLeast(c, STOP) || firstTask != null || workQueue.isEmpty()))
+                    return false;
 
                 for (; ; ) {
                     if (workerCountOf(c) >= ((core ? corePoolSize : maximumPoolSize) & COUNT_MASK)) return false;
@@ -1072,7 +1080,8 @@ public interface PrioritizedExecutor {
             }
         }
 
-        @Override public void execute(Runnable command) {
+        @Override
+        public void execute(Runnable command) {
             executeTask(command);
         }
 
@@ -1388,7 +1397,8 @@ public interface PrioritizedExecutor {
          * @since 1.6
          */
         public void allowCoreThreadTimeOut(boolean value) {
-            if (value && keepAliveTime <= 0) throw new IllegalArgumentException("Core threads must have nonzero keep alive times");
+            if (value && keepAliveTime <= 0)
+                throw new IllegalArgumentException("Core threads must have nonzero keep alive times");
             if (value != allowCoreThreadTimeOut) {
                 allowCoreThreadTimeOut = value;
                 if (value) interruptIdleWorkers();
@@ -1968,7 +1978,8 @@ public interface PrioritizedExecutor {
     class DefaultThreadFactory implements ThreadFactory {
         private final AtomicInteger count = new AtomicInteger();
 
-        @Override public Thread newThread(@NotNull Runnable r) {
+        @Override
+        public Thread newThread(@NotNull Runnable r) {
             var thread = new Thread(r);
             thread.setDaemon(true);
             thread.setName("ChunkGenerator-" + count.incrementAndGet());
@@ -1978,7 +1989,8 @@ public interface PrioritizedExecutor {
     }
 
     class DefaultRejectedExecutionHandler implements RejectedExecutionHandler {
-        @Override public void rejectedExecution(Runnable r, Pool executor) {
+        @Override
+        public void rejectedExecution(Runnable r, Pool executor) {
             new RejectedExecutionException("Failed to execute runnable " + r + " on executor " + executor).printStackTrace();
         }
     }

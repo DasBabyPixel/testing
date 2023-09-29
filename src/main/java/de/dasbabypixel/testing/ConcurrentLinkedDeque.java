@@ -101,6 +101,21 @@ public final class ConcurrentLinkedDeque<T> {
         }
     }
 
+    public T peekFirst() {
+        restart:
+        for (; ; ) {
+            T item;
+            Node<T> first = first(), p = first;
+            while ((item = p.item) == null) {
+                if (p == (p = p.next)) continue restart;
+                if (p == null) break;
+            }
+            // recheck for linearizability
+            if (first.prev != null) continue;
+            return item;
+        }
+    }
+
     /**
      * Removes the first occurrence of the specified element from this deque.
      * If the deque does not contain the element, it is unchanged.

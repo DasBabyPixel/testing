@@ -21,8 +21,6 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ChunkPriorityQueue<T> extends AbstractQueue<T> implements BlockingQueue<T> {
 
     private final AtomicBoolean waiting = new AtomicBoolean(false);
-    private final ReentrantLock lock = new ReentrantLock();
-    private final Condition notEmpty = lock.newCondition();
     private final ConcurrentLinkedDeque<T>[] queues;
 
     public ChunkPriorityQueue(int priorityCount) {
@@ -35,17 +33,15 @@ public class ChunkPriorityQueue<T> extends AbstractQueue<T> implements BlockingQ
     public Entry<T> add(int priority, T chunk) {
         var node = queues[priority].offerLast(chunk);
         if (waiting.compareAndSet(true, false)) {
-            try {
-                lock.lock();
-                notEmpty.signalAll();
-            } finally {
-                lock.unlock();
+            synchronized (this) {
+                notifyAll();
             }
         }
         return new Entry<>(chunk, node);
     }
 
-    @Override public boolean offer(@NotNull T t) {
+    @Override
+    public boolean offer(@NotNull T t) {
         if (t instanceof Prioritized p) {
             add(p.priority(), t);
             return true;
@@ -53,7 +49,8 @@ public class ChunkPriorityQueue<T> extends AbstractQueue<T> implements BlockingQ
         throw new UnsupportedOperationException();
     }
 
-    @Override public @NotNull T take() {
+    @Override
+    public @NotNull T take() throws InterruptedException {
         while (true) {
             for (var queue : queues) {
                 var value = queue.pollFirst();
@@ -62,57 +59,81 @@ public class ChunkPriorityQueue<T> extends AbstractQueue<T> implements BlockingQ
             }
 
             waiting.set(true);
-            try {
-                lock.lock();
+            synchronized (this) {
                 if (!waiting.get()) continue;
-                notEmpty.awaitUninterruptibly();
-            } finally {
-                lock.unlock();
+                this.wait();
             }
         }
     }
 
-    @Override public @NotNull Iterator<T> iterator() {
+    @Override
+    public int drainTo(@NotNull Collection<? super T> c) {
+        int count = 0;
+        for (ConcurrentLinkedDeque<T> queue : queues) {
+            T entry;
+            while ((entry = queue.pollFirst()) != null) {
+                c.add(entry);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Override
+    public @NotNull Iterator<T> iterator() {
         throw new UnsupportedOperationException();
     }
 
-    @Override public int size() {
+    @Override
+    public boolean isEmpty() {
+        for (ConcurrentLinkedDeque<T> queue : queues) {
+            if (queue.peekFirst() != null) return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int size() {
+        return -1;
+    }
+
+    @Override
+    public void put(@NotNull T t) throws InterruptedException {
         throw new UnsupportedOperationException();
     }
 
-    @Override public void put(@NotNull T t) throws InterruptedException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override public boolean add(@NotNull T t) {
+    @Override
+    public boolean add(@NotNull T t) {
         return super.add(t);
     }
 
-    @Override public boolean offer(T t, long timeout, @NotNull TimeUnit unit) throws InterruptedException {
+    @Override
+    public boolean offer(T t, long timeout, @NotNull TimeUnit unit) throws InterruptedException {
         throw new UnsupportedOperationException();
     }
 
-    @Override public T poll(long timeout, @NotNull TimeUnit unit) throws InterruptedException {
+    @Override
+    public T poll(long timeout, @NotNull TimeUnit unit) throws InterruptedException {
         throw new UnsupportedOperationException();
     }
 
-    @Override public int remainingCapacity() {
+    @Override
+    public int remainingCapacity() {
         throw new UnsupportedOperationException();
     }
 
-    @Override public int drainTo(@NotNull Collection<? super T> c) {
+    @Override
+    public int drainTo(@NotNull Collection<? super T> c, int maxElements) {
         throw new UnsupportedOperationException();
     }
 
-    @Override public int drainTo(@NotNull Collection<? super T> c, int maxElements) {
+    @Override
+    public T poll() {
         throw new UnsupportedOperationException();
     }
 
-    @Override public T poll() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override public T peek() {
+    @Override
+    public T peek() {
         throw new UnsupportedOperationException();
     }
 
