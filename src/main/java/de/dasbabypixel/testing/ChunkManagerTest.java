@@ -55,7 +55,7 @@ public class ChunkManagerTest {
 
     public static void test1() {
 
-        var priorityCount = 8;
+        var priorityCount = 33;
         var radius = (float) priorityCount - 1;
         var frame = new JFrame();
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -87,7 +87,7 @@ public class ChunkManagerTest {
 
         frame.setVisible(true);
 
-        var playerTicketManagers = new PlayerTicketManager[50];
+        var playerTicketManagers = new PlayerTicketManager[2];
         Arrays.setAll(playerTicketManagers, value -> new PlayerTicketManager(chunkManager, priorityCalculator, radius));
 
         var service = Executors.newCachedThreadPool(r -> {
@@ -95,23 +95,30 @@ public class ChunkManagerTest {
             thread.setPriority(Thread.NORM_PRIORITY);
             return thread;
         });
+        service.submit(() -> {
+            while (true) {
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(500));
+                System.gc();
+                if (Thread.interrupted()) return;
+            }
+        });
         for (var playerTicketManager : playerTicketManagers) {
-            var simulator = new RandomMovementSimulator(playerTicketManager, 0, 0, image.getWidth(), image.getHeight());
-            playerTicketManager.move(simulator.x(), simulator.y());
-            service.submit(() -> {
-                int i = 1;
-                while (!playerTicketManager.unloaded()) {
-                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
-                    long time1 = System.nanoTime();
-                    synchronized (playerTicketManager) {
-                        if (playerTicketManager.unloaded()) return;
-                        i = -i;
-                        simulator.tick();
-                    }
-                    System.out.println(TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - time1));
-                    if (Thread.interrupted()) return;
-                }
-            });
+//            var simulator = new RandomMovementSimulator(playerTicketManager, 0, 0, image.getWidth(), image.getHeight());
+//            playerTicketManager.move(simulator.x(), simulator.y());
+//            service.submit(() -> {
+//                int i = 1;
+//                while (!playerTicketManager.unloaded()) {
+//                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+//                    long time1 = System.nanoTime();
+//                    synchronized (playerTicketManager) {
+//                        if (playerTicketManager.unloaded()) return;
+//                        i = -i;
+////                        simulator.tick();
+//                    }
+//                    System.out.println(TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - time1));
+//                    if (Thread.interrupted()) return;
+//                }
+//            });
 //            break;
         }
         frame.addWindowListener(windowListener(chunkManager, service));
@@ -310,7 +317,7 @@ public class ChunkManagerTest {
     private static Long2ObjectFunction<Color> generator() {
         return key -> {
 //            if (ThreadLocalRandom.current().nextDouble() < 0.1)
-//                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(50));
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
 //            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(ThreadLocalRandom.current().nextInt(5)));
             return Color.BLACK;
         };
