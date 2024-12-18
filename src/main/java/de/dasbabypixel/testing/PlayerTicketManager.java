@@ -2,6 +2,7 @@ package de.dasbabypixel.testing;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class PlayerTicketManager {
 
@@ -65,6 +66,7 @@ public class PlayerTicketManager {
     }
 
     public void move(int newX, int newY) {
+        var start = System.nanoTime();
         synchronized (this) {
             var oldX = x;
             var oldY = y;
@@ -91,6 +93,8 @@ public class PlayerTicketManager {
             y = newY;
             unloaded = false;
         }
+        var end = System.nanoTime();
+        System.out.println("Took " + TimeUnit.NANOSECONDS.toMicros(end - start) + " microseconds");
     }
 
 }
